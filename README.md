@@ -8,6 +8,8 @@ I am a beginner. I am using AI tools (Cursor) to help me learn, but I still revi
 
 This repository will become a responsive website built with modern frontend tools.
 
+I have not picked the exact website topic yet. It will be either a personal site, a storefront-style site, or a client-style site.
+
 **Status:** Week 1 — FE-01 Environment and AI toolchain. I have not built the website yet. This week is only setup, documentation, and GitHub practice.
 
 **Planned stack** (to be added in later assignments):
