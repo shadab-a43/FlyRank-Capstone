@@ -10,7 +10,7 @@ This repository will become a responsive website built with modern frontend tool
 
 I have not picked the exact website topic yet. It will be either a personal site, a storefront-style site, or a client-style site.
 
-**Status:** Week 1 — FE-01 Environment and AI toolchain. I have not built the website yet. This week is only setup, documentation, and GitHub practice.
+**Status:** A small React settings form is in place. The full website topic is still not picked yet.
 
 **Planned stack** (to be added in later assignments):
 
@@ -29,18 +29,16 @@ I have not picked the exact website topic yet. It will be either a personal site
 | `CLAUDE.md` | Tells the AI how to help me in this repo |
 | `LICENSE` | Says how others may use this code (MIT) |
 | `.gitignore` | Tells Git which files not to upload |
+| `src/App.tsx` | Settings form (name, email, theme) |
+| `package.json` | App scripts and packages |
 
-## Setup (for later)
-
-When the app exists, a typical local setup will look like this:
+## Setup
 
 1. Install [Node.js LTS](https://nodejs.org/)
 2. Install [Git](https://git-scm.com/)
 3. Clone this repository
-4. Install packages with `npm install`
-5. Start the app with the command listed in `package.json`
-
-Those steps are not needed yet because there is no application code.
+4. Run `npm install`
+5. Run `npm run dev` and open the URL Vite prints (usually `http://localhost:5173`)
 
 ## How I am working
 
