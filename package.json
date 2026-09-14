@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
     "lint": "oxlint src tests vite.config.ts",
     "test": "tsc -p tsconfig.test.json && node --test tests/validation.test.js",
     "typecheck": "tsc --noEmit"
