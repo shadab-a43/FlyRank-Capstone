@@ -42,7 +42,7 @@ When the app exists, a typical local setup will look like this:
 
 Those steps are not needed yet because there is no application code.
 
-## How I am working
+## How I am working 
 
 - I write short **Conventional Commits** (`docs:`, `chore:`, `feat:`)
 - I ask the AI to explain things simply
