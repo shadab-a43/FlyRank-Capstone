@@ -1,6 +1,7 @@
 import './styles.css';
 
 import { FormEvent, useEffect, useRef, useState } from 'react';
+import { NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { getMovieDetails, searchMovies } from './services/omdbApi';
 import { Movie, MovieDetails } from './types/movie';
 
@@ -44,6 +45,12 @@ function hasMatchingGenre(movieGenre: string | undefined, selectedGenre: string)
 }
 
 export default function App() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const routeMovieId = location.pathname.startsWith('/movie/')
+    ? decodeURIComponent(location.pathname.slice('/movie/'.length))
+    : '';
+
   const [query, setQuery] = useState('');
   const [movies, setMovies] = useState<Movie[]>([]);
   const [selectedGenre, setSelectedGenre] = useState('all');
@@ -56,6 +63,10 @@ export default function App() {
   const [error, setError] = useState('');
   const [hasSearched, setHasSearched] = useState(false);
   const [storageError, setStorageError] = useState(false);
+  const [healthStatus, setHealthStatus] = useState<'loading' | 'success' | 'error'>('loading');
+  const [healthCheckedAt, setHealthCheckedAt] = useState('');
+  const [healthResultCount, setHealthResultCount] = useState(0);
+  const [healthSampleTitle, setHealthSampleTitle] = useState('');
   const detailsRequestController = useRef<AbortController | null>(null);
   const detailsRequestId = useRef(0);
 
@@ -92,6 +103,60 @@ export default function App() {
       setStorageError(true);
     }
   }, [watchlist]);
+
+  useEffect(() => {
+    if (!routeMovieId) {
+      return;
+    }
+
+    if (routeMovieId !== selectedMovieId) {
+      void handleMovieSelect(routeMovieId);
+    }
+  }, [routeMovieId, selectedMovieId]);
+
+  useEffect(() => {
+    if (location.pathname !== '/health') {
+      return;
+    }
+
+    let isCancelled = false;
+
+    async function checkHealth() {
+      setHealthStatus('loading');
+      setHealthCheckedAt('');
+      setHealthResultCount(0);
+      setHealthSampleTitle('');
+
+      try {
+        const results = await searchMovies('The Matrix');
+
+        if (isCancelled) {
+          return;
+        }
+
+        const sampleTitle = results[0]?.Title ?? 'No sample title available';
+        setHealthStatus('success');
+        setHealthCheckedAt(new Date().toLocaleString());
+        setHealthResultCount(results.length);
+        setHealthSampleTitle(sampleTitle);
+      } catch {
+        if (isCancelled) {
+          return;
+        }
+
+        setHealthStatus('error');
+        setHealthCheckedAt(new Date().toLocaleString());
+        setHealthResultCount(0);
+        setHealthSampleTitle('');
+      }
+    }
+
+    void checkHealth();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [location.pathname]);
 
   async function handleSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -196,13 +261,17 @@ export default function App() {
     return value && value !== 'N/A' ? value : 'Not available';
   }
 
-  function renderMovieCard(movie: Movie, isFirstVisible = false) {
+  function renderMovieCard(movie: Movie, isFirstVisible = false, onSelect?: (id: string) => void) {
+    const selectMovie = onSelect ?? ((imdbID: string) => {
+      void handleMovieSelect(imdbID);
+    });
+
     return (
       <button
         className="movie-card"
         key={movie.imdbID}
         type="button"
-        onClick={() => handleMovieSelect(movie.imdbID)}
+        onClick={() => selectMovie(movie.imdbID)}
         aria-label={`View details for ${movie.Title}`}
       >
         <img
@@ -219,8 +288,8 @@ export default function App() {
     );
   }
 
-  return (
-    <main className="page-shell">
+  function renderHomeScreen() {
+    return (
       <section className="app-intro" aria-labelledby="app-title">
         <p className="eyebrow">Movie discovery</p>
         <h1 id="app-title">Find your next favorite film.</h1>
@@ -243,88 +312,6 @@ export default function App() {
           </div>
         </form>
 
-        <section className="watchlist-section" aria-labelledby="watchlist-title">
-          <div className="section-heading">
-            <h2 id="watchlist-title">Watchlist</h2>
-            <span>{watchlist.length} saved</span>
-          </div>
-          {watchlist.length === 0 ? (
-            <p className="status-message" role="status">Your watchlist is empty. Add a movie to save it here.</p>
-          ) : (
-            <div className="movie-grid">
-              {watchlist.map((movie, index) => renderMovieCard(movie, index === 0))}
-            </div>
-          )}
-          {storageError && (
-            <p className="status-message" role="status">
-              Your watchlist is available for this session but could not be saved.
-            </p>
-          )}
-        </section>
-
-        {selectedMovieId ? (
-          <section className="movie-details" aria-busy={isDetailsLoading}>
-            <button className="back-button" type="button" onClick={handleBackToResults}>
-              Back to search results
-            </button>
-            {isDetailsLoading && <p className="status-message" role="status">Loading movie details...</p>}
-            {!isDetailsLoading && detailsError && (
-              <p className="status-message error-message" role="alert">{detailsError}</p>
-            )}
-            {!isDetailsLoading && selectedMovie && (
-              <article className="details-content">
-                <img
-                  src={getPoster(selectedMovie.Poster)}
-                  alt={`${selectedMovie.Title} poster`}
-                />
-                <div>
-                  <p className="eyebrow">{getDetailValue(selectedMovie.Type)}</p>
-                  <h2>{selectedMovie.Title}</h2>
-                  <p className="details-meta">
-                    {getDetailValue(selectedMovie.Year)} - IMDb {getDetailValue(selectedMovie.imdbRating)}
-                  </p>
-                  <button className="watchlist-button" type="button" onClick={handleWatchlistToggle}>
-                    {watchlist.some((movie) => movie.imdbID === selectedMovie.imdbID)
-                      ? 'Remove from Watchlist'
-                      : 'Add to Watchlist'}
-                  </button>
-                  <dl className="details-facts">
-                    <div>
-                      <dt>Genre</dt>
-                      <dd>{getDetailValue(selectedMovie.Genre)}</dd>
-                    </div>
-                    <div>
-                      <dt>Runtime</dt>
-                      <dd>{getDetailValue(selectedMovie.Runtime)}</dd>
-                    </div>
-                    <div>
-                      <dt>Director</dt>
-                      <dd>{getDetailValue(selectedMovie.Director)}</dd>
-                    </div>
-                    <div>
-                      <dt>Actors</dt>
-                      <dd>{getDetailValue(selectedMovie.Actors)}</dd>
-                    </div>
-                  </dl>
-                  <h3>Plot</h3>
-                  <p className="details-plot">{getDetailValue(selectedMovie.Plot)}</p>
-                </div>
-              </article>
-            )}
-            {!isDetailsLoading && selectedMovie && (
-              <section className="recommendations" aria-labelledby="recommendations-title">
-                <h2 id="recommendations-title">You May Also Like</h2>
-                {recommendations.length > 0 ? (
-                  <div className="movie-grid">
-                    {recommendations.map((movie, index) => renderMovieCard(movie, index === 0))}
-                  </div>
-                ) : (
-                  <p className="status-message" role="status">No similar movies available yet.</p>
-                )}
-              </section>
-            )}
-          </section>
-        ) : (
         <div className="results-area" aria-busy={isLoading}>
           <div className="filter-controls">
             <label htmlFor="genre-filter">Genre</label>
@@ -352,12 +339,211 @@ export default function App() {
           )}
           {!isLoading && !error && filteredMovies.length > 0 && (
             <div className="movie-grid">
-              {filteredMovies.map((movie, index) => renderMovieCard(movie, index === 0))}
+              {filteredMovies.map((movie, index) =>
+                renderMovieCard(movie, index === 0, (imdbID) => {
+                  navigate(`/movie/${encodeURIComponent(imdbID)}`);
+                  void handleMovieSelect(imdbID);
+                }),
+              )}
             </div>
           )}
         </div>
+
+        <section className="watchlist-section" aria-labelledby="watchlist-title">
+          <div className="section-heading">
+            <h2 id="watchlist-title">Watchlist</h2>
+            <span>{watchlist.length} saved</span>
+          </div>
+          {watchlist.length === 0 ? (
+            <p className="status-message" role="status">
+              Your watchlist is empty. Add a movie to save it here.
+            </p>
+          ) : (
+            <div className="movie-grid">
+              {watchlist.map((movie, index) =>
+                renderMovieCard(movie, index === 0, (imdbID) => {
+                  navigate(`/movie/${encodeURIComponent(imdbID)}`);
+                  void handleMovieSelect(imdbID);
+                }),
+              )}
+            </div>
+          )}
+          {storageError && (
+            <p className="status-message" role="status">
+              Your watchlist is available for this session but could not be saved.
+            </p>
+          )}
+        </section>
+      </section>
+    );
+  }
+
+  function renderDetailsScreen() {
+    return (
+      <section className="app-intro movie-details" aria-busy={isDetailsLoading}>
+        <button
+          className="back-button"
+          type="button"
+          onClick={() => {
+            handleBackToResults();
+            navigate('/');
+          }}
+        >
+          Back to search results
+        </button>
+        {isDetailsLoading && <p className="status-message" role="status">Loading movie details...</p>}
+        {!isDetailsLoading && detailsError && (
+          <p className="status-message error-message" role="alert">{detailsError}</p>
+        )}
+        {!isDetailsLoading && selectedMovie && (
+          <article className="details-content">
+            <img src={getPoster(selectedMovie.Poster)} alt={`${selectedMovie.Title} poster`} />
+            <div>
+              <p className="eyebrow">{getDetailValue(selectedMovie.Type)}</p>
+              <h2>{selectedMovie.Title}</h2>
+              <p className="details-meta">
+                {getDetailValue(selectedMovie.Year)} - IMDb {getDetailValue(selectedMovie.imdbRating)}
+              </p>
+              <button className="watchlist-button" type="button" onClick={handleWatchlistToggle}>
+                {watchlist.some((movie) => movie.imdbID === selectedMovie.imdbID)
+                  ? 'Remove from Watchlist'
+                  : 'Add to Watchlist'}
+              </button>
+              <dl className="details-facts">
+                <div>
+                  <dt>Genre</dt>
+                  <dd>{getDetailValue(selectedMovie.Genre)}</dd>
+                </div>
+                <div>
+                  <dt>Runtime</dt>
+                  <dd>{getDetailValue(selectedMovie.Runtime)}</dd>
+                </div>
+                <div>
+                  <dt>Director</dt>
+                  <dd>{getDetailValue(selectedMovie.Director)}</dd>
+                </div>
+                <div>
+                  <dt>Actors</dt>
+                  <dd>{getDetailValue(selectedMovie.Actors)}</dd>
+                </div>
+              </dl>
+              <h3>Plot</h3>
+              <p className="details-plot">{getDetailValue(selectedMovie.Plot)}</p>
+            </div>
+          </article>
+        )}
+        {!isDetailsLoading && selectedMovie && (
+          <section className="recommendations" aria-labelledby="recommendations-title">
+            <h2 id="recommendations-title">You May Also Like</h2>
+            {recommendations.length > 0 ? (
+              <div className="movie-grid">
+                {recommendations.map((movie, index) =>
+                  renderMovieCard(movie, index === 0, (imdbID) => {
+                    navigate(`/movie/${encodeURIComponent(imdbID)}`);
+                    void handleMovieSelect(imdbID);
+                  }),
+                )}
+              </div>
+            ) : (
+              <p className="status-message" role="status">No similar movies available yet.</p>
+            )}
+          </section>
         )}
       </section>
+    );
+  }
+
+  function renderWatchlistScreen() {
+    return (
+      <section className="app-intro" aria-labelledby="watchlist-page-title">
+        <p className="eyebrow">Saved picks</p>
+        <h1 id="watchlist-page-title">Your Watchlist</h1>
+        <div className="watchlist-section" aria-labelledby="watchlist-page-title">
+          {watchlist.length === 0 ? (
+            <p className="status-message" role="status">
+              Your watchlist is empty. Add a movie to save it here.
+            </p>
+          ) : (
+            <div className="movie-grid">
+              {watchlist.map((movie, index) =>
+                renderMovieCard(movie, index === 0, (imdbID) => {
+                  navigate(`/movie/${encodeURIComponent(imdbID)}`);
+                  void handleMovieSelect(imdbID);
+                }),
+              )}
+            </div>
+          )}
+          {storageError && (
+            <p className="status-message" role="status">
+              Your watchlist is available for this session but could not be saved.
+            </p>
+          )}
+        </div>
+      </section>
+    );
+  }
+
+  function renderHealthScreen() {
+    return (
+      <section className="app-intro" aria-labelledby="health-title">
+        <p className="eyebrow">System status</p>
+        <h1 id="health-title">App health check</h1>
+
+        {healthStatus === 'loading' && (
+          <p className="status-message" role="status" aria-live="polite">
+            Checking the movie service…
+          </p>
+        )}
+
+        {healthStatus === 'success' && (
+          <div className="health-panel" role="status" aria-live="polite">
+            <p className="health-status success">Status: Healthy</p>
+            <dl className="health-metrics">
+              <div>
+                <dt>Checked</dt>
+                <dd>{healthCheckedAt}</dd>
+              </div>
+              <div>
+                <dt>Result count</dt>
+                <dd>{healthResultCount}</dd>
+              </div>
+              <div>
+                <dt>Sample title</dt>
+                <dd>{healthSampleTitle}</dd>
+              </div>
+            </dl>
+          </div>
+        )}
+
+        {healthStatus === 'error' && (
+          <p className="status-message error-message" role="alert" aria-live="assertive">
+            The movie service is temporarily unavailable. Please try again later.
+          </p>
+        )}
+      </section>
+    );
+  }
+
+  return (
+    <main className="page-shell">
+      <header className="top-nav" aria-label="Main navigation">
+        <NavLink className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`} to="/">
+          Home
+        </NavLink>
+        <NavLink className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`} to="/watchlist">
+          Watchlist
+        </NavLink>
+        <NavLink className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`} to="/health">
+          Health
+        </NavLink>
+      </header>
+
+      <Routes>
+        <Route path="/" element={renderHomeScreen()} />
+        <Route path="/movie/:id" element={renderDetailsScreen()} />
+        <Route path="/watchlist" element={renderWatchlistScreen()} />
+        <Route path="/health" element={renderHealthScreen()} />
+      </Routes>
     </main>
   );
 }

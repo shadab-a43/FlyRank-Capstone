@@ -56,6 +56,41 @@ body {
     repeating-linear-gradient(0deg, transparent 0, transparent 2rem, rgb(47 77 49 / 3%) 2rem, rgb(47 77 49 / 3%) 2.0625rem);
 }
 
+.top-nav {
+  width: min(100%, 66rem);
+  margin: 0 auto 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: rgb(255 253 248 / 94%);
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  box-shadow: 0 0.5rem 1.25rem rgb(45 61 42 / 8%);
+}
+
+.nav-link {
+  color: var(--accent-color);
+  text-decoration: none;
+  font: 700 0.95rem Arial, sans-serif;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.25rem;
+}
+
+.nav-link:hover {
+  background: var(--soft-accent);
+}
+
+.nav-link.active {
+  background: var(--accent-color);
+  color: var(--button-text-color);
+}
+
+.nav-link:focus-visible {
+  outline: 3px solid var(--eyebrow-color);
+  outline-offset: 2px;
+}
+
 .app-intro {
   width: min(100%, 66rem);
   margin: auto;
@@ -154,6 +189,45 @@ h1 {
 .results-area {
   margin-top: clamp(2.5rem, 6vw, 4rem);
   font-family: Arial, sans-serif;
+}
+
+.health-panel {
+  margin-top: 1.5rem;
+  padding: 1.25rem;
+  background: var(--page-background);
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+}
+
+.health-status {
+  margin: 0;
+  font: 700 1rem Arial, sans-serif;
+}
+
+.health-status.success {
+  color: var(--accent-color);
+}
+
+.health-metrics {
+  display: grid;
+  gap: 0.75rem;
+  margin: 1rem 0 0;
+}
+
+.health-metrics div {
+  display: grid;
+  grid-template-columns: minmax(7.5rem, 9rem) 1fr;
+  gap: 0.75rem;
+}
+
+.health-metrics dt {
+  color: var(--muted-text);
+  font-weight: 700;
+}
+
+.health-metrics dd {
+  margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .filter-controls {
