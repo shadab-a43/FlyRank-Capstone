@@ -14,6 +14,14 @@ function jsonResponse(statusCode, body) {
 	});
 }
 
+function safeDiagnosticBody(value, redactions) {
+	const sanitizedBody = redactions.reduce(
+		(body, valueToRedact) => valueToRedact ? body.replaceAll(valueToRedact, "[redacted]") : body,
+		value,
+	);
+	return sanitizedBody.slice(0, 1000);
+}
+
 const recommendationSchema = {
 	type: "OBJECT",
 	properties: {
@@ -66,6 +74,15 @@ export default async function handler(request) {
 		return jsonResponse(500, { error: "AI service is not configured" });
 	}
 
+	const prompt = body.prompt.trim();
+	const recommendationPrompt = `Recommend exactly 3 movies for this request: ${prompt}. Keep each reason short and useful. Return only JSON matching the provided schema, with no Markdown or extra text.`;
+	const diagnosticRedactions = [
+		apiKey,
+		prompt,
+		JSON.stringify(prompt).slice(1, -1),
+		recommendationPrompt,
+	];
+
 	try {
 		const response = await fetch(
 			"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
@@ -80,7 +97,7 @@ export default async function handler(request) {
 					{
 						parts: [
 							{
-								text: `Recommend exactly 3 movies for this request: ${body.prompt.trim()}. Keep each reason short and useful. Return only JSON matching the provided schema, with no Markdown or extra text.`,
+								text: recommendationPrompt,
 							},
 						],
 					},
@@ -94,10 +111,27 @@ export default async function handler(request) {
 		);
 
 		if (!response.ok) {
+			const providerError = await response.text();
+			console.error(
+				response.status,
+				response.statusText,
+				safeDiagnosticBody(providerError, diagnosticRedactions),
+			);
 			return jsonResponse(502, { error: "AI recommendation request failed" });
 		}
 
-		const result = await response.json();
+		const responseText = await response.text();
+		let result;
+		try {
+			result = JSON.parse(responseText);
+		} catch {
+			console.error(
+				"Gemini response JSON parse failed:",
+				safeDiagnosticBody(responseText, diagnosticRedactions),
+			);
+			return jsonResponse(500, { error: "Unexpected error while generating recommendations" });
+		}
+
 		const recommendationText = result.candidates?.[0]?.content?.parts
 			?.map((part) => part.text ?? "")
 			.join("");
@@ -109,6 +143,10 @@ export default async function handler(request) {
 		try {
 			parsedRecommendation = JSON.parse(recommendationText);
 		} catch {
+			console.error(
+				"Gemini recommendation JSON parse failed:",
+				safeDiagnosticBody(recommendationText, diagnosticRedactions),
+			);
 			return jsonResponse(502, { error: "AI recommendation response was invalid" });
 		}
 
