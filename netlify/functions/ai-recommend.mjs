@@ -14,14 +14,6 @@ function jsonResponse(statusCode, body) {
 	});
 }
 
-function safeDiagnosticBody(value, redactions) {
-	const sanitizedBody = redactions.reduce(
-		(body, valueToRedact) => valueToRedact ? body.replaceAll(valueToRedact, "[redacted]") : body,
-		value,
-	);
-	return sanitizedBody.slice(0, 1000);
-}
-
 const recommendationSchema = {
 	type: "OBJECT",
 	properties: {
@@ -74,12 +66,6 @@ export default async function handler(request) {
 
 	const prompt = body.prompt.trim();
 	const recommendationPrompt = `Recommend exactly 3 movies for this request: ${prompt}. Keep each reason short and useful. Return only JSON matching the provided schema, with no Markdown or extra text.`;
-	const diagnosticRedactions = [
-		apiKey,
-		prompt,
-		JSON.stringify(prompt).slice(1, -1),
-		recommendationPrompt,
-	];
 
 	try {
 		const response = await fetch(
@@ -109,12 +95,6 @@ export default async function handler(request) {
 		);
 
 		if (!response.ok) {
-			const providerError = await response.text();
-			console.error(
-				response.status,
-				response.statusText,
-				safeDiagnosticBody(providerError, diagnosticRedactions),
-			);
 			return jsonResponse(502, { error: "AI recommendation request failed" });
 		}
 
@@ -123,10 +103,6 @@ export default async function handler(request) {
 		try {
 			result = JSON.parse(responseText);
 		} catch {
-			console.error(
-				"Gemini response JSON parse failed:",
-				safeDiagnosticBody(responseText, diagnosticRedactions),
-			);
 			return jsonResponse(500, { error: "Unexpected error while generating recommendations" });
 		}
 
@@ -141,10 +117,6 @@ export default async function handler(request) {
 		try {
 			parsedRecommendation = JSON.parse(recommendationText);
 		} catch {
-			console.error(
-				"Gemini recommendation JSON parse failed:",
-				safeDiagnosticBody(recommendationText, diagnosticRedactions),
-			);
 			return jsonResponse(502, { error: "AI recommendation response was invalid" });
 		}
 

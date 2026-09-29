@@ -1,6 +1,76 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { resolveTheme, validateSettings } from '../.test-build/validation.js';
+import aiRecommendHandler from '../netlify/functions/ai-recommend.mjs';
+
+const TEST_API_KEY_PLACEHOLDER = 'test-only-placeholder';
+const validRecommendations = [
+  {
+    title: 'Arrival',
+    year: 2016,
+    reason: 'Thoughtful science fiction with a strong emotional story.',
+    genres: ['Science Fiction', 'Drama'],
+  },
+  {
+    title: 'The Martian',
+    year: 2015,
+    reason: 'An adventurous space survival story.',
+    genres: ['Science Fiction', 'Adventure'],
+  },
+  {
+    title: 'Contact',
+    year: 1997,
+    reason: 'A curious, character-focused first-contact story.',
+    genres: ['Science Fiction', 'Drama'],
+  },
+];
+
+async function withTestGlobals(apiKey, fetchStub, runTest) {
+  const previousApiKey = process.env.GEMINI_API_KEY;
+  const previousFetch = globalThis.fetch;
+
+  if (apiKey === null) {
+    delete process.env.GEMINI_API_KEY;
+  } else {
+    process.env.GEMINI_API_KEY = apiKey;
+  }
+  globalThis.fetch = fetchStub;
+
+  try {
+    await runTest();
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousApiKey === undefined) {
+      delete process.env.GEMINI_API_KEY;
+    } else {
+      process.env.GEMINI_API_KEY = previousApiKey;
+    }
+  }
+}
+
+function createRequest(method, body) {
+  return new Request('http://localhost/api/ai-recommend', {
+    method,
+    ...(body === undefined
+      ? {}
+      : { body, headers: { 'Content-Type': 'application/json' } }),
+  });
+}
+
+function createGeminiResponse(recommendations) {
+  return new Response(
+    JSON.stringify({
+      candidates: [
+        {
+          content: {
+            parts: [{ text: JSON.stringify({ recommendations }) }],
+          },
+        },
+      ],
+    }),
+    { status: 200 },
+  );
+}
 
 const validValues = {
   name: 'Shadab',
@@ -40,4 +110,109 @@ test('resolves light and dark themes directly', () => {
 test('resolves the system theme from the system preference', () => {
   assert.equal(resolveTheme('system', false), 'light');
   assert.equal(resolveTheme('system', true), 'dark');
+});
+
+test('AI recommendation OPTIONS requests return 204', async () => {
+  const response = await aiRecommendHandler(createRequest('OPTIONS'));
+
+  assert.equal(response.status, 204);
+});
+
+test('AI recommendation rejects non-POST requests with 405', async () => {
+  const response = await aiRecommendHandler(createRequest('GET'));
+
+  assert.equal(response.status, 405);
+});
+
+test('AI recommendation rejects invalid JSON with 400', async () => {
+  const response = await aiRecommendHandler(createRequest('POST', '{'));
+
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), { error: 'Invalid JSON body' });
+});
+
+test('AI recommendation rejects missing and empty prompts with 400', async () => {
+  await withTestGlobals(TEST_API_KEY_PLACEHOLDER, async () => {
+    assert.fail('Fetch should not be called for an invalid prompt.');
+  }, async () => {
+    const missingPromptResponse = await aiRecommendHandler(
+      createRequest('POST', JSON.stringify({})),
+    );
+    const emptyPromptResponse = await aiRecommendHandler(
+      createRequest('POST', JSON.stringify({ prompt: '  ' })),
+    );
+
+    assert.equal(missingPromptResponse.status, 400);
+    assert.equal(emptyPromptResponse.status, 400);
+  });
+});
+
+test('AI recommendation returns 500 when GEMINI_API_KEY is missing', async () => {
+  let fetchCalls = 0;
+
+  await withTestGlobals(null, async () => {
+    fetchCalls += 1;
+    throw new Error('Unexpected fetch call');
+  }, async () => {
+    const response = await aiRecommendHandler(
+      createRequest('POST', JSON.stringify({ prompt: 'Recommend science fiction' })),
+    );
+
+    assert.equal(response.status, 500);
+    assert.deepEqual(await response.json(), { error: 'AI service is not configured' });
+  });
+
+  assert.equal(fetchCalls, 0);
+});
+
+test('AI recommendation returns three validated recommendations on success', async () => {
+  let fetchCalls = 0;
+
+  await withTestGlobals(TEST_API_KEY_PLACEHOLDER, async () => {
+    fetchCalls += 1;
+    return createGeminiResponse(validRecommendations);
+  }, async () => {
+    const response = await aiRecommendHandler(
+      createRequest('POST', JSON.stringify({ prompt: 'Adventure in space' })),
+    );
+    const result = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(result.recommendations.length, 3);
+    assert.deepEqual(result.recommendations, validRecommendations);
+  });
+
+  assert.equal(fetchCalls, 1);
+});
+
+test('AI recommendation rejects an invalid Gemini response', async () => {
+  await withTestGlobals(TEST_API_KEY_PLACEHOLDER, async () => {
+    return createGeminiResponse(validRecommendations.slice(0, 2));
+  }, async () => {
+    const response = await aiRecommendHandler(
+      createRequest('POST', JSON.stringify({ prompt: 'Adventure in space' })),
+    );
+
+    assert.equal(response.status, 502);
+    assert.deepEqual(await response.json(), {
+      error: 'AI recommendation response was invalid',
+    });
+  });
+});
+
+test('AI recommendation returns a generic error when Gemini request fails', async () => {
+  await withTestGlobals(
+    TEST_API_KEY_PLACEHOLDER,
+    async () => new Response('provider error details', { status: 503 }),
+    async () => {
+      const response = await aiRecommendHandler(
+        createRequest('POST', JSON.stringify({ prompt: 'Adventure in space' })),
+      );
+
+      assert.equal(response.status, 502);
+      assert.deepEqual(await response.json(), {
+        error: 'AI recommendation request failed',
+      });
+    },
+  );
 });
