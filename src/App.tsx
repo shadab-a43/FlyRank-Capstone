@@ -8,6 +8,32 @@ import { Movie, MovieDetails } from './types/movie';
 const FALLBACK_POSTER = 'https://placehold.co/300x450/e8ece3/2f4d31?text=No+poster';
 const WATCHLIST_STORAGE_KEY = 'movie-app-watchlist';
 
+type AiRecommendation = {
+  title: string;
+  year: number;
+  reason: string;
+  genres: string[];
+};
+
+function isAiRecommendation(value: unknown): value is AiRecommendation {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+
+  const recommendation = value as Record<string, unknown>;
+  return (
+    typeof recommendation.title === 'string' &&
+    Number.isInteger(recommendation.year) &&
+    typeof recommendation.reason === 'string' &&
+    Array.isArray(recommendation.genres) &&
+    recommendation.genres.every((genre) => typeof genre === 'string')
+  );
+}
+
+function isAiRecommendationList(value: unknown): value is AiRecommendation[] {
+  return Array.isArray(value) && value.length === 3 && value.every(isAiRecommendation);
+}
+
 function readWatchlist(): Movie[] {
   try {
     const savedMovies = localStorage.getItem(WATCHLIST_STORAGE_KEY);
@@ -62,7 +88,7 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [aiPrompt, setAiPrompt] = useState('');
-  const [aiRecommendation, setAiRecommendation] = useState('');
+  const [aiRecommendations, setAiRecommendations] = useState<AiRecommendation[]>([]);
   const [aiError, setAiError] = useState('');
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
@@ -199,7 +225,7 @@ export default function App() {
 
     setIsAiLoading(true);
     setAiError('');
-    setAiRecommendation('');
+    setAiRecommendations([]);
 
     try {
       const response = await fetch('/api/ai-recommend', {
@@ -207,18 +233,14 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt }),
       });
-      const result: { recommendation?: unknown } | null = await response.json();
-      const recommendation = result?.recommendation;
+      const result: { recommendations?: unknown } | null = await response.json();
+      const recommendations = result?.recommendations;
 
-      if (
-        !response.ok ||
-        typeof recommendation !== 'string' ||
-        !recommendation.trim()
-      ) {
+      if (!response.ok || !isAiRecommendationList(recommendations)) {
         throw new Error('Recommendation request failed');
       }
 
-      setAiRecommendation(recommendation);
+      setAiRecommendations(recommendations);
     } catch {
       setAiError("Sorry, we couldn't get recommendations right now. Please try again.");
     } finally {
@@ -382,10 +404,30 @@ export default function App() {
             </p>
           )}
           {aiError && <p className="ai-status-message error-message" role="alert">{aiError}</p>}
-          {aiRecommendation && (
+          {aiRecommendations.length > 0 && (
             <div className="ai-recommendation-result" aria-live="polite">
-              <h3>Recommendation</h3>
-              <p>{aiRecommendation}</p>
+              <h3>Recommended for you</h3>
+              <ol className="ai-recommendation-grid" aria-label="AI movie recommendations">
+                {aiRecommendations.map((recommendation, index) => (
+                  <li key={`${recommendation.title}-${recommendation.year}-${index}`}>
+                    <article className="ai-recommendation-card">
+                      <div className="ai-recommendation-card-heading">
+                        <h4>{recommendation.title}</h4>
+                        <span>{recommendation.year}</span>
+                      </div>
+                      <ul className="ai-recommendation-genres" aria-label="Genres">
+                        {recommendation.genres.map((genre) => (
+                          <li key={genre}>{genre}</li>
+                        ))}
+                      </ul>
+                      <div>
+                        <h5>Why it matches</h5>
+                        <p>{recommendation.reason}</p>
+                      </div>
+                    </article>
+                  </li>
+                ))}
+              </ol>
             </div>
           )}
         </section>

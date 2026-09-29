@@ -14,6 +14,33 @@ function jsonResponse(statusCode, body) {
 	});
 }
 
+const recommendationSchema = {
+	type: "OBJECT",
+	properties: {
+		recommendations: {
+			type: "ARRAY",
+			minItems: 3,
+			maxItems: 3,
+			items: {
+				type: "OBJECT",
+				properties: {
+					title: { type: "STRING" },
+					year: { type: "INTEGER" },
+					reason: { type: "STRING" },
+					genres: {
+						type: "ARRAY",
+						items: { type: "STRING" },
+					},
+				},
+				required: ["title", "year", "reason", "genres"],
+				additionalProperties: false,
+			},
+		},
+	},
+	required: ["recommendations"],
+	additionalProperties: false,
+};
+
 export default async function handler(request) {
 	if (request.method === "OPTIONS") {
 		return new Response(null, { status: 204, headers: corsHeaders });
@@ -49,7 +76,19 @@ export default async function handler(request) {
 				"Content-Type": "application/json",
 			},
 			body: JSON.stringify({
-				contents: [{ parts: [{ text: body.prompt.trim() }] }],
+				contents: [
+					{
+						parts: [
+							{
+								text: `Recommend exactly 3 movies for this request: ${body.prompt.trim()}. Keep each reason short and useful. Return only JSON matching the provided schema, with no Markdown or extra text.`,
+							},
+						],
+					},
+				],
+				generationConfig: {
+					responseMimeType: "application/json",
+					responseSchema: recommendationSchema,
+				},
 			}),
 			},
 		);
@@ -59,14 +98,42 @@ export default async function handler(request) {
 		}
 
 		const result = await response.json();
-		const recommendation = result.candidates?.[0]?.content?.parts
+		const recommendationText = result.candidates?.[0]?.content?.parts
 			?.map((part) => part.text ?? "")
 			.join("");
-		if (typeof recommendation !== "string" || !recommendation.trim()) {
+		if (typeof recommendationText !== "string" || !recommendationText.trim()) {
 			return jsonResponse(502, { error: "AI recommendation response was invalid" });
 		}
 
-		return jsonResponse(200, { recommendation });
+		let parsedRecommendation;
+		try {
+			parsedRecommendation = JSON.parse(recommendationText);
+		} catch {
+			return jsonResponse(502, { error: "AI recommendation response was invalid" });
+		}
+
+		const recommendations = parsedRecommendation?.recommendations;
+		const isValidRecommendations =
+			Array.isArray(recommendations) &&
+			recommendations.length === 3 &&
+			recommendations.every(
+				(recommendation) =>
+					typeof recommendation?.title === "string" &&
+					recommendation.title.trim().length > 0 &&
+					Number.isInteger(recommendation.year) &&
+					typeof recommendation.reason === "string" &&
+					recommendation.reason.trim().length > 0 &&
+					Array.isArray(recommendation.genres) &&
+					recommendation.genres.every(
+						(genre) => typeof genre === "string" && genre.trim().length > 0,
+					),
+			);
+
+		if (!isValidRecommendations) {
+			return jsonResponse(502, { error: "AI recommendation response was invalid" });
+		}
+
+		return jsonResponse(200, { recommendations });
 	} catch {
 		return jsonResponse(500, { error: "Unexpected error while generating recommendations" });
 	}
