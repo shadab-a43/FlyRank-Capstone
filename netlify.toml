@@ -1,0 +1,4 @@
+[[redirects]]
+  from = "/api/ai-recommend"
+  to = "/.netlify/functions/ai-recommend"
+  status = 200

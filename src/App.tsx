@@ -61,6 +61,10 @@ export default function App() {
   const [detailsError, setDetailsError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [aiRecommendation, setAiRecommendation] = useState('');
+  const [aiError, setAiError] = useState('');
+  const [isAiLoading, setIsAiLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [storageError, setStorageError] = useState(false);
   const [healthStatus, setHealthStatus] = useState<'loading' | 'success' | 'error'>('loading');
@@ -182,6 +186,43 @@ export default function App() {
       setError(searchError instanceof Error ? searchError.message : 'Unable to search for movies.');
     } finally {
       setIsLoading(false);
+    }
+  }
+
+  async function handleAiRecommendation(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const prompt = aiPrompt.trim();
+
+    if (!prompt) {
+      return;
+    }
+
+    setIsAiLoading(true);
+    setAiError('');
+    setAiRecommendation('');
+
+    try {
+      const response = await fetch('/api/ai-recommend', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt }),
+      });
+      const result: { recommendation?: unknown } | null = await response.json();
+      const recommendation = result?.recommendation;
+
+      if (
+        !response.ok ||
+        typeof recommendation !== 'string' ||
+        !recommendation.trim()
+      ) {
+        throw new Error('Recommendation request failed');
+      }
+
+      setAiRecommendation(recommendation);
+    } catch {
+      setAiError("Sorry, we couldn't get recommendations right now. Please try again.");
+    } finally {
+      setIsAiLoading(false);
     }
   }
 
@@ -311,6 +352,43 @@ export default function App() {
             </button>
           </div>
         </form>
+
+        <section
+          className="ai-recommendation-section"
+          aria-labelledby="ai-recommendation-title"
+          aria-busy={isAiLoading}
+        >
+          <div>
+            <p className="eyebrow">A little inspiration</p>
+            <h2 id="ai-recommendation-title">AI Movie Recommendations</h2>
+          </div>
+          <form className="ai-recommendation-form" onSubmit={handleAiRecommendation}>
+            <label htmlFor="ai-movie-prompt">What kind of movie are you in the mood for?</label>
+            <textarea
+              id="ai-movie-prompt"
+              value={aiPrompt}
+              onChange={(event) => setAiPrompt(event.target.value)}
+              placeholder="I want something like Interstellar but more adventurous..."
+              rows={3}
+              required
+            />
+            <button type="submit" disabled={isAiLoading || !aiPrompt.trim()}>
+              {isAiLoading ? 'Getting recommendations...' : 'Get AI Recommendations'}
+            </button>
+          </form>
+          {isAiLoading && (
+            <p className="ai-status-message" role="status" aria-live="polite">
+              Finding a movie for you...
+            </p>
+          )}
+          {aiError && <p className="ai-status-message error-message" role="alert">{aiError}</p>}
+          {aiRecommendation && (
+            <div className="ai-recommendation-result" aria-live="polite">
+              <h3>Recommendation</h3>
+              <p>{aiRecommendation}</p>
+            </div>
+          )}
+        </section>
 
         <div className="results-area" aria-busy={isLoading}>
           <div className="filter-controls">
