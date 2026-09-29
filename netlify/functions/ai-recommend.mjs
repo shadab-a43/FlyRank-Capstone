@@ -41,12 +41,10 @@ const recommendationSchema = {
 					},
 				},
 				required: ["title", "year", "reason", "genres"],
-				additionalProperties: false,
 			},
 		},
 	},
 	required: ["recommendations"],
-	additionalProperties: false,
 };
 
 export default async function handler(request) {
