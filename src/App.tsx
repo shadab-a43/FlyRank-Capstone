@@ -90,6 +90,7 @@ export default function App() {
   const [aiPrompt, setAiPrompt] = useState('');
   const [aiRecommendations, setAiRecommendations] = useState<AiRecommendation[]>([]);
   const [aiError, setAiError] = useState('');
+  const [aiStatusAnnouncement, setAiStatusAnnouncement] = useState('');
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [storageError, setStorageError] = useState(false);
@@ -226,6 +227,7 @@ export default function App() {
     setIsAiLoading(true);
     setAiError('');
     setAiRecommendations([]);
+    setAiStatusAnnouncement('Finding a movie for you...');
 
     try {
       const response = await fetch('/api/ai-recommend', {
@@ -241,8 +243,10 @@ export default function App() {
       }
 
       setAiRecommendations(recommendations);
+      setAiStatusAnnouncement('Recommendations are ready.');
     } catch {
       setAiError("Sorry, we couldn't get recommendations right now. Please try again.");
+      setAiStatusAnnouncement('');
     } finally {
       setIsAiLoading(false);
     }
@@ -375,6 +379,13 @@ export default function App() {
           </div>
         </form>
 
+        <div className="visually-hidden" role="status" aria-live="polite" aria-atomic="true">
+          {aiStatusAnnouncement}
+        </div>
+        <div className="visually-hidden" role="alert" aria-atomic="true">
+          {aiError}
+        </div>
+
         <section
           className="ai-recommendation-section"
           aria-labelledby="ai-recommendation-title"
@@ -399,13 +410,11 @@ export default function App() {
             </button>
           </form>
           {isAiLoading && (
-            <p className="ai-status-message" role="status" aria-live="polite">
-              Finding a movie for you...
-            </p>
+            <p className="ai-status-message">Finding a movie for you...</p>
           )}
-          {aiError && <p className="ai-status-message error-message" role="alert">{aiError}</p>}
+          {aiError && <p className="ai-status-message error-message">{aiError}</p>}
           {aiRecommendations.length > 0 && (
-            <div className="ai-recommendation-result" aria-live="polite">
+            <div className="ai-recommendation-result">
               <h3>Recommended for you</h3>
               <ol className="ai-recommendation-grid" aria-label="AI movie recommendations">
                 {aiRecommendations.map((recommendation, index) => (
