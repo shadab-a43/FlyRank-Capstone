@@ -1,54 +1,155 @@
-# FlyRank Capstone
+# Movie Recommendation & Watchlist — AI-Powered Movie Discovery
 
-This is my capstone project for the **FlyRank Front-end AI Engineering** internship.
+## Overview
 
-I am a beginner. I am using AI tools (Cursor) to help me learn, but I still review the work and try to understand every change.
+A responsive movie-discovery application for searching the OMDb catalog, viewing movie details, filtering search results by genre, and saving movies to a watchlist stored in the browser. It also accepts a natural-language prompt and returns AI-powered movie recommendations.
 
-## About this project
+## Key Features
 
-This repository will become a responsive website built with modern frontend tools.
+- Search for movies, series, and episodes using OMDb.
+- Open a result to view its movie details.
+- Save and remove movies from a watchlist persisted with `localStorage`.
+- Filter search results by genre.
+- Request movie recommendations with a natural-language prompt.
+- Request structured AI output containing exactly three recommendations.
+- Show loading and user-facing error states, and reject malformed recommendation responses.
+- Use a responsive layout, keyboard-visible focus styles, and screen-reader status/error announcements.
 
-I have not picked the exact website topic yet. It will be either a personal site, a storefront-style site, or a client-style site.
+## AI Integration
 
-**Status:** Week 1 — FE-01 Environment and AI toolchain. I have not built the website yet. This week is only setup, documentation, and GitHub practice.
+The recommendation request follows this flow:
 
-**Planned stack** (to be added in later assignments):
+```text
+React frontend
+  -> Netlify Function
+  -> Gemini API
+  -> structured JSON response
+  -> validated recommendations
+  -> React recommendation cards
+```
 
-- React
-- TypeScript
-- Tailwind CSS
-- Node.js (LTS)
-- Git and GitHub
-- Cursor as my AI coding editor
+The frontend sends the user's prompt to the Netlify Function. The function calls Gemini with a structured response schema, validates the returned data, and sends valid recommendations back to the frontend. The Gemini API key is read by the function from the server-side `GEMINI_API_KEY` environment variable; it is not hardcoded in the frontend.
 
-## Current files
+## AI Response Structure
 
-| File | Purpose |
-|------|---------|
-| `README.md` | Explains the project in plain language |
-| `CLAUDE.md` | Tells the AI how to help me in this repo |
-| `LICENSE` | Says how others may use this code (MIT) |
-| `.gitignore` | Tells Git which files not to upload |
+The function requests and validates exactly three recommendations. Each recommendation contains:
 
-## Setup (for later)
+- `title`: movie title
+- `year`: release year as an integer
+- `reason`: a short explanation of why it matches
+- `genres`: an array of genre strings
 
-When the app exists, a typical local setup will look like this:
+Responses with an unexpected shape or invalid recommendation data are rejected rather than rendered.
 
-1. Install [Node.js LTS](https://nodejs.org/)
-2. Install [Git](https://git-scm.com/)
-3. Clone this repository
-4. Install packages with `npm install`
-5. Start the app with the command listed in `package.json`
+## Tech Stack
 
-Those steps are not needed yet because there is no application code.
+- React 19 and TypeScript
+- Vite for the frontend development server and build
+- React Router for client-side routes
+- CSS for application styling
+- OMDb API for movie search and details
+- Netlify Functions and Netlify redirects for the AI endpoint
+- Gemini API for AI recommendations
+- Node.js built-in test runner and `oxlint` for automated tests and linting
 
-## How I am working 
+## Project Structure
 
-- I write short **Conventional Commits** (`docs:`, `chore:`, `feat:`)
-- I ask the AI to explain things simply
-- I do not commit secrets (API keys, `.env` files)
-- I check AI-generated text before I keep it
+```text
+.
+├── netlify/
+│   └── functions/
+│       └── ai-recommend.mjs
+├── public/
+│   └── robots.txt
+├── src/
+│   ├── services/
+│   │   └── omdbApi.ts
+│   ├── types/
+│   │   └── movie.ts
+│   ├── App.tsx
+│   ├── main.tsx
+│   ├── styles.css
+│   ├── validation.ts
+│   └── vite-env.d.ts
+├── tests/
+│   └── validation.test.js
+├── .env.example
+├── index.html
+├── LICENSE
+├── netlify.toml
+├── package.json
+├── package-lock.json
+├── tsconfig.json
+├── tsconfig.test.json
+└── vite.config.ts
+```
 
-## Author
+## Local Setup
 
-Shadab — FlyRank Front-end AI Engineering intern
+1. Install Node.js, which includes npm.
+2. Install the project dependencies:
+
+	```sh
+	npm install
+	```
+
+3. Copy `.env.example` to `.env` and replace its placeholder values with your own OMDb and Gemini credentials. The required variable names are `VITE_OMDB_API_KEY` and `GEMINI_API_KEY`. `.env` is ignored by Git; do not commit it. Keep `GEMINI_API_KEY` server-side and configure it in Netlify's environment for deployment.
+4. Start the Vite frontend development server:
+
+	```sh
+	npm run dev
+	```
+
+	Vite serves the frontend; it does not run the Netlify Function. To exercise the AI endpoint locally, use the Netlify CLI and its local development command, `netlify dev`.
+
+5. Run automated tests:
+
+	```sh
+	npm test
+	```
+
+6. Run lint:
+
+	```sh
+	npm run lint
+	```
+
+7. Build the production frontend:
+
+	```sh
+	npm run build
+	```
+
+## Testing
+
+The current automated test suite has **16 passing tests**. AI handler tests replace `fetch` with a stub, so tests do not make real Gemini API calls or require a real Gemini API key.
+
+## Accessibility & Performance
+
+The latest Lighthouse results are:
+
+| Category | Score |
+|---|---:|
+| Performance | 100 |
+| Accessibility | 100 |
+| Best Practices | 100 |
+| SEO | 100 |
+
+## Deployment
+
+The application is deployed on Netlify, with `capstone-ai` as the production branch. Netlify routes `/api/ai-recommend` to the `ai-recommend` function. Visit the [production site](https://flyrank-movie-recommendation.netlify.app/).
+
+## Limitations
+
+- AI recommendations depend on the availability of the external Gemini service and may be imperfect.
+- Movie search and details depend on the availability of the OMDb service.
+
+## Future Improvements
+
+- Add browser-level tests for the main search, watchlist, and recommendation workflows.
+- Add pagination for larger movie search result sets.
+- Improve recommendation controls, such as allowing users to refine or regenerate results.
+
+## License
+
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for the full license text.
