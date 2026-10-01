@@ -103,12 +103,14 @@ export default async function handler(request) {
 		try {
 			result = JSON.parse(responseText);
 		} catch {
-			return jsonResponse(500, { error: "Unexpected error while generating recommendations" });
+			return jsonResponse(502, { error: "AI recommendation response was invalid" });
 		}
 
-		const recommendationText = result.candidates?.[0]?.content?.parts
-			?.map((part) => part.text ?? "")
-			.join("");
+		const candidate = Array.isArray(result?.candidates) ? result.candidates[0] : undefined;
+		const parts = candidate?.content?.parts;
+		const recommendationText = Array.isArray(parts)
+			? parts.map((part) => (typeof part?.text === "string" ? part.text : "")).join("")
+			: "";
 		if (typeof recommendationText !== "string" || !recommendationText.trim()) {
 			return jsonResponse(502, { error: "AI recommendation response was invalid" });
 		}

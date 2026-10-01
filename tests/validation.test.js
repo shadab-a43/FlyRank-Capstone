@@ -72,6 +72,23 @@ function createGeminiResponse(recommendations) {
   );
 }
 
+function createGeminiPayloadResponse(payload) {
+  return new Response(JSON.stringify(payload), { status: 200 });
+}
+
+async function assertInvalidGeminiResponse(geminiResponse) {
+  await withTestGlobals(TEST_API_KEY_PLACEHOLDER, async () => geminiResponse, async () => {
+    const response = await aiRecommendHandler(
+      createRequest('POST', JSON.stringify({ prompt: 'Adventure in space' })),
+    );
+
+    assert.equal(response.status, 502);
+    assert.deepEqual(await response.json(), {
+      error: 'AI recommendation response was invalid',
+    });
+  });
+}
+
 const validValues = {
   name: 'Shadab',
   email: 'shadab@example.com',
@@ -186,18 +203,53 @@ test('AI recommendation returns three validated recommendations on success', asy
 });
 
 test('AI recommendation rejects an invalid Gemini response', async () => {
-  await withTestGlobals(TEST_API_KEY_PLACEHOLDER, async () => {
-    return createGeminiResponse(validRecommendations.slice(0, 2));
-  }, async () => {
-    const response = await aiRecommendHandler(
-      createRequest('POST', JSON.stringify({ prompt: 'Adventure in space' })),
-    );
+  await assertInvalidGeminiResponse(createGeminiResponse(validRecommendations.slice(0, 2)));
+});
 
-    assert.equal(response.status, 502);
-    assert.deepEqual(await response.json(), {
-      error: 'AI recommendation response was invalid',
-    });
-  });
+test('AI recommendation rejects Gemini responses with malformed envelopes or unusable content', async () => {
+  await assertInvalidGeminiResponse(new Response('{', { status: 200 }));
+  await assertInvalidGeminiResponse(createGeminiPayloadResponse({}));
+  await assertInvalidGeminiResponse(createGeminiPayloadResponse({ candidates: [] }));
+  await assertInvalidGeminiResponse(
+    createGeminiPayloadResponse({ candidates: [{ content: { parts: [] } }] }),
+  );
+  await assertInvalidGeminiResponse(
+    createGeminiPayloadResponse({ candidates: [{ content: { parts: [{ text: 42 }] } }] }),
+  );
+  await assertInvalidGeminiResponse(
+    createGeminiPayloadResponse({ candidates: [{ content: { parts: [{ text: '{' }] } }] }),
+  );
+});
+
+test('AI recommendation rejects invalid recommendation counts and fields', async () => {
+  const invalidRecommendations = [
+    validRecommendations.concat(validRecommendations[0]),
+    validRecommendations.map((recommendation, index) =>
+      index === 0 ? { ...recommendation, title: '  ' } : recommendation,
+    ),
+    validRecommendations.map((recommendation, index) =>
+      index === 0 ? { ...recommendation, reason: '' } : recommendation,
+    ),
+    validRecommendations.map((recommendation, index) =>
+      index === 0 ? { ...recommendation, year: '2016' } : recommendation,
+    ),
+    validRecommendations.map((recommendation, index) =>
+      index === 0 ? { ...recommendation, genres: undefined } : recommendation,
+    ),
+    validRecommendations.map((recommendation, index) =>
+      index === 0 ? { ...recommendation, genres: 'Drama' } : recommendation,
+    ),
+    validRecommendations.map((recommendation, index) =>
+      index === 0 ? { ...recommendation, genres: ['Drama', 42] } : recommendation,
+    ),
+    validRecommendations.map((recommendation, index) =>
+      index === 0 ? { ...recommendation, genres: ['Drama', '  '] } : recommendation,
+    ),
+  ];
+
+  for (const recommendations of invalidRecommendations) {
+    await assertInvalidGeminiResponse(createGeminiResponse(recommendations));
+  }
 });
 
 test('AI recommendation returns a generic error when Gemini request fails', async () => {
